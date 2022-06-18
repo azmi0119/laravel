@@ -1,0 +1,455 @@
+1.
+   select * from books 
+           where author_name = 'JK Rowling' 
+           and (rating > 4 or genre = 'fiction');
+
+2.
+   $users = User::where('name', '=', 'Elmer Berge PhD')
+     ->where(function ($query) {
+         $query->where('rating', '>', 4)
+               ->orWhere('gender', '=', 'female');
+     })->get();
+
+
+3. 
+   $books = Book::where('author_name', '=', 'JK Rowling')
+     ->where(function ($query) {
+         $query->where('rating', '>', 4)
+               ->orWhere('genre', '=', 'fiction');
+     })
+     ->get();
+
+4.
+   $externalValue = "User";
+   $users = User::where(function ($query) use($externalValue) {
+         return $query->where('type','Admin')->orWhere('type',$externalValue);
+     })->where("role",1)->get();
+
+5. 
+   $product = Product::whereHas('sale', function($query) { 
+          $query->where('provider_id', '=', 1); }
+      )->get();
+
+6. 
+   // This var would not get passed to the closure as it's "out of scope"
+   $outOfScopeVar = [12,13,14];
+
+   $posts = Post::where(function($query) use($outOfScopeVar)
+   {
+     $query->where('title', 'LIKE', "%search%")
+           ->orWhere('body', 'LIKE', "%search%")
+           ->whereIn('id', function ($query2) use ($outOfScopeVar) {
+               $query2->select('users_posts.posts_id')
+                 ->from('users_posts')
+                 ->whereIn('users_posts.users_id',$outOfScopeVar)
+                 ->get();
+           });
+   });
+
+7. 
+   Model::where(function($query) {
+       $query->where('a', 'like', 'keyword');
+       $query->or_where('b', 'like', 'keyword');
+   })->where('c', '=', '1')->get();
+
+8. 
+   $users = User::with('posts')->get();
+   foreach($users as $user){
+       $users->posts; // posts is already loaded and no additional DB query is run
+   }
+
+9. 
+   $users = User::has('posts')->get();
+
+10.
+   // only users that have posts from 2015 on forward are returned 
+   $users = User::whereHas('posts', function($q){
+       $q->where('created_at', '>=', '2015-01-01 00:00:00');
+   })->get();
+
+11. 
+   $order =  rder::whereHas('orderItems', function($query) {
+      $query->where('status', 1);
+   })->get();
+
+   select * from `orders` where exists (
+       select * 
+       from `order_items` 
+       where `orders`.`id` = `order_items`.`order_id` and `status` = 1
+   );
+
+12. Please visit this link here 20 Eloquent Tip and Trick 
+   https://laravel-news.com/eloquent-tips-tricks
+
+13. 
+	DB::table('users')->where(function ($query) use ($activated) {
+	    $query->where('activated', '=', $activated);
+	})->get();
+
+14. 
+	DB::table('users')->where(function ($query) use ($activated,$var2) {
+	    $query->where('activated', '=', $activated);
+	    $query->where('var2', '>', $var2);
+	})->get();
+
+15. 
+	$status =1;
+	$info = JOBS::where(function($query) use ($status){        
+		$query->where('status',$status);
+	})->get();
+	print_r($info);
+
+16. 
+	if ($name) {
+	$query->where(function($q) use ($name) {
+	        $q->where('first_name', 'like', "$name%")
+	          ->orWhere('last_name', 'like', "$name%");
+	   });
+	}
+
+17. 
+	$q = DB::table('mytable')->select(['id', 'first_name', 'last_name']);
+	if(!empty($name)) {
+	    $q->where(function($query)use($name){
+	        $query->where(('first_name', 'like', "$name%")
+	            ->orWhere('last_name', 'like', "$name%");
+	    });
+	}
+
+18. 
+	$ageGroup = 'older';
+	$dogs = \App\Dogs::select('name', 'age')
+	        ->when($ageGroup == 'older',
+	            function($q){
+	                return $q->where('age','>', 8);
+	            },
+	            function($q){
+	                return $q->where('age','<', 8);
+	            }
+	        );
+	dd($dogs->get());
+
+19. 
+	A. 
+		$products = Product::where('price', '>=', $min_price) // you get the max and min price 
+	        ->where('id', '<=', $max_price)->select('id')
+	        ->with([
+	            "brand" => function ($query) {
+	                $query->whereIn('id', $brand_ids); // [1, 2, 3,...]
+	            },
+	            "specifications" => function ($query) {
+	                $query->where('some_column', '=', 'possible-value'); // single condition
+	            },
+	            "specifications.subspecifications" => function ($query) {
+	                $query->where([
+	                    'some_column' => 'possible-value',
+	                    'another_column' => 'possible-value'
+	                ]); // you can also pass arrays of condition
+	            }
+	        ])->get(); // This will return the products with the price set by the user
+	                   // Since we're just using ->with(), this will also return those products
+	                   // that doesn't match the other criteria specifications) so we 
+	                   // still need to filter it.
+    B.
+    	$products = Product::orWhere('price','>=',$min_price)
+					->orWhere('price','<=',$max_price)
+					->orWhereHas('brand',function($query){
+					    $query->whereIn('id', $brand_ids);
+					})
+					->orWhereHas('suboptions',function($query){
+					    $query->whereIn('id', $suboptions_ids);
+					})
+					->orWhereHas('subspecifications',function($query){
+					    $query->whereIn('id', $subspecifications_ids);
+					})->get();
+
+    C.
+    	$products = Product::query()
+	    ->when($request->min_price, function ($query, $min_price) {
+	        return $query->where('price', '>=', $min_price);
+	    })
+	    ->when($request->max_price, function ($query, $max_price) {
+	        return $query->where('price', '<=', $max_price);
+	    })
+	    ->when($request->suboptions, function ($query, $suboptions) {
+	        $suboptionsConstraint = function ($q) use ($suboptions) {
+	            return $q->whereIn('id', $suboptions);
+	        };
+	        return $query->whereHas('suboptions', $suboptionsContraint)
+	            ->with(['suboptions' => $suboptionsContraint]);
+	    })
+	    ->when($request->brands, function ($query, $brands) {
+	        $brandsConstraint = function ($q) use ($brands) {
+	            return $q->whereIn('id', $brands);
+	        };
+	        return $query->whereHas('brands', $brandsConstraint)
+	            ->with(['brands' => $brandsConstraint]);
+	    });
+
+20. 
+	A.
+	$finalizadas = Solicitud::where('sol_estado', 4)
+		->when($tecnico, function ($query) use ($tecnico) {
+		    return $query->whereHas('tecnicos', function ($query) use ($tecnico) {
+		        $query->where('tecnico_tec_id', $tecnico);
+		    });
+		}, function ($query) {
+		    return $query->has('tecnicos');        
+		})
+		->when($desde, function ($query) use ($desde, $hasta) {
+		    return $query->whereBetween('sol_fecha_finalizada', [$desde, $hasta]);
+		})
+		->when($tipo, function ($query) use ($tipo) {
+		    return $query->where('sol_tipo_solicitud', $tipo);
+		})
+		->when($tecnico, function ($query) use ($tecnico) {
+		    return $query->where('tecnico_tec_id', $tecnico);
+		})
+		->when($cliente, function ($query) use ($cliente) {
+		    return $query->where('sol_cliente', $cliente);
+		})
+		->get();
+
+	B.
+		$finalizadas = Solicitud::whereHas('tecnicos')
+          	->when($tecnico, function ($query) use ($tecnico) {
+              	return Solicitud::whereHas('tecnicos', function ($query) use ($tecnico) {
+                     	return $query->where('tecnico_tec_id', $tecnico)->where('sol_estado', 4);
+                    });
+          	})
+          	->when($cliente, function ($query) use ($cliente) {
+              	return $query->where('sol_cliente', $cliente)->where('sol_estado', 4);
+          	})
+          	->when($desde, function ($query) use ($desde, $hasta) {
+              	return $query->whereBetween('sol_fecha_finalizada', [$desde, $hasta])->where('sol_estado', 4);
+          	})
+          	->when($tipo, function ($query) use ($tipo) {
+              	return $query->where('sol_tipo_solicitud', $tipo)->where('sol_estado', 4);
+          	})
+          	->get();
+21. 
+	A.
+		User::select('users.*')->join('posts', 'posts.user_id', '=', 'users.id')->get();
+
+	B.
+		User::select('users.*')
+			->join('posts', 'posts.user_id', '=', 'users.id')
+			->join('comments', 'comments.post_id', '=', 'posts.id')
+			->get();
+
+	C.
+		// example 1
+		User::joinRelationship('posts');
+
+		// example 2
+		User::joinRelationship('posts.comments');
+
+22.
+	A Model
+		class A extends Model {
+
+		    /**
+		     * Get all B for the A.
+		     */
+		    public function b()
+		    {
+		    return $this->hasMany(B::class);
+		    }
+		}
+
+	B Model
+		class B extends Model {
+		    /**
+		     * Get the B's A.
+		     */
+		    public function a()
+		    {
+		    return $this->belongsTo(A::class);
+		    }
+		}
+
+	Controller
+		$allB = B::whereHas('a', function (Builder $query) {
+            $query->where('A.name',  $givenName);
+        })->where('created_at','>=',$givenDate)->get();
+
+23. 
+	$offices = \App\Office::with(['users' => function($query) {
+		$query->orderBy('teamorder');
+	}])->orderBy('order')->get();
+
+24. 
+	Reference Link =>    https://rappasoft.com/blog/refactoring-with-laravels-new-whererelation-methods
+
+	A.
+		// Get me all users who have posts that are to be published in the future.
+		User::whereHas('posts', function ($query) {
+		    $query->where('published_at', '>', now());
+		})->get();
+
+	B.
+		User::whereRelation('posts', 'published_at', '>', now())->get();
+
+	C.
+		User::whereHas('posts', function ($query) {
+		    $query->notPublished();
+		})->get();
+
+	D. 
+		User::whereHas('posts', function ($query) {
+		    $query->whereHas('tags', function ($query) {
+		            $query->where('name', 'Laravel');
+		        })->where('published_at', '>', now());
+			})->get();
+	E.
+		User::whereRelation('posts.tags', 'name', 'Laravel')->get();
+
+25. Reference Linke =>     https://protone.media/nl/blog/stop-duplicating-your-eloquent-query-scopes-and-constraints-re-use-them-as-select-statements-with-a-new-laravel-package
+
+	Post Model
+		class Post extends Model
+		{
+		    protected $casts = [
+		        'published_at' => 'datetime',
+		    ];
+
+		    public function comments()
+		    {
+		        return $this->hasMany(Comment::class);
+		    }
+
+		    public function scopeHasSubtitle($query)
+		    {
+		        $query->whereNotNull('subtitle');
+		    }
+
+		    public function scopeFromCurrentYear($query)
+		    {
+		        $query->whereYear('published_at', date('Y'));
+		    }
+
+		    public function scopeHasTenOrMoreComments($query)
+		    {
+		        $query->has('comments', '>=', 10);
+		    }
+		}
+
+	controller 
+		$allPosts = Post::query()->get();
+		$postsWithSubtitles = Post::query()->hasSubtitle()->get();
+		$postsFromCurrentYear = Post::query()->fromCurrentYear()->get();
+		$popularPostsFromCurrentYear = Post::query()->fromCurrentYear()->hasTenOrMoreComments()->get();
+
+		or 
+
+		Post::query()
+	    ->withCount('comments')
+	    ->get()
+	    ->each(function (Post $post) {
+	        $recentlyPopularWithSubtitle = $post->subtitle
+	            && $post->published_at->isCurrentYear()
+	            && $post->comments_count >= 10;
+	    })->get();
+
+26. 
+	A.
+		$users = App\User::has('photos')->get();
+	B.
+		$users = App\User::has('photos', '>=', 5)->get();
+	C.
+		// Retrieve all users that have at least one photo with comments on it...
+		$users = App\User::has('photos.comments')->get();
+	D.
+		// Retrieve all users that have at least one photo with comments on it...
+		$users = App\User::has('photos.comments')->get();
+	E.
+		// Retrieve users with at least one address containing state like arizona%...
+		$users = App\User::whereHas('addresses', function (Builder $query) {
+		    $query->where('state', 'like', 'arizona%');
+		})->get();
+	F.
+		// Retrieve all users that don't have a photo...
+		$users = App\User::doesntHave('photos')->get();
+	G.
+		// Retrieve users with at least one address containing state like arizona%...
+		$users = App\User::whereDoesntHave('addresses', function (Builder $query) {
+			$query->where('state', 'like', 'arizona%');
+		})->get();
+	H.
+		$users = App\User::whereDoesntHave('photos.comments.author', function (Builder $query) {
+		    $query->where('active', 0);
+		})->get();
+	I.
+
+27.
+	A.
+		$users = DB::table('users')->paginate(5);
+	B.
+		$users = DB::table('users')->simplePaginate(5);
+	C.
+
+
+28. Reference Linke  => https://www.digitalocean.com/community/tutorials/how-to-order-query-results-in-laravel-eloquent
+	A.
+		Route::get('/', function () {
+		    $links = Link::all()->sortDesc();
+		    return view('index', [
+		        'links' => $links,
+		        'lists' => LinkList::all()
+		    ]);
+		});
+
+		Route::get('/{slug}', function ($slug) {
+		    $list = LinkList::where('slug', $slug)->first();
+		    if (!$list) {
+		        abort(404);
+		    }
+
+		    return view('index', [
+		        'list' => $list,
+		        'links' => $list->links,
+		        'lists' => LinkList::all()
+		    ]);
+		})->name('link-list');
+
+	B.
+		<?php
+
+		use Illuminate\Support\Facades\Route;
+		use App\Models\Link;
+		use App\Models\LinkList;
+
+		/*
+		|--------------------------------------------------------------------------
+		| Web Routes
+		|--------------------------------------------------------------------------
+		|
+		| Here is where you can register web routes for your application. These
+		| routes are loaded by the RouteServiceProvider within a group which
+		| contains the "web" middleware group. Now create something great!
+		|
+		*/
+
+		Route::get('/', function () {
+		    $links = Link::all()->sortDesc();
+		    return view('index', [
+		        'links' => $links,
+		        'lists' => LinkList::all()
+		    ]);
+		});
+
+		Route::get('/{slug}', function ($slug) {
+		    $list = LinkList::where('slug', $slug)->first();
+		    if (!$list) {
+		        abort(404);
+		    }
+
+		    return view('index', [
+		        'list' => $list,
+		        'links' => $list->links()->orderBy('created_at', 'desc')->get(),
+		        'lists' => LinkList::all()
+		    ]);
+		})->name('link-list');
+
+
+29.

@@ -1,0 +1,146 @@
+1. User::firstOrCreate(['email', => request->email]);
+
+2. WhereX => There’s an elegant way to turn this:
+	User::where('approved',1)->get(); 
+	Post::where('active',1)->get();
+	Post::where('published',1)->get();
+	Post::where('category', null)->get;
+	Post::where('category', '!=', null)->get;
+
+	or
+
+	User::whereApproved(1)->get();
+	Post::whereActive(1)->get();
+	Post::wherePublished(1)->get();
+	Post::whereNull('category')->get();
+	Post::whereNotNull('category')->get();
+
+	etc
+
+3. User::whereDate('created_at',date(Y-m-d));
+   User::whereDay('created_at',date('d'));
+   User::whereMonth('created_at',date('m'));
+   User::whereYear('created_at',date('Y'))	;
+
+4. Order by relationship
+    1. public function latesPost() {
+	   	return $this->hasOne(App\Post::class)->latest();
+	   }
+
+	   Note : And then, in our controller, we can access like this “magic”:
+
+	   Topic::with('latestPost')->get()->sortByDesc('latestPost.created_at');
+ 	
+ 	2. Eloquent::when() — no more if-else’s
+	   Many of us write conditional queries with “if-else”, something like this:
+
+	   Example - 1
+		   if($request('filter_by' == 'like')) {
+		   	$query->where('like' '>' request('like_amount',0));
+		   }
+
+		   if($request('filter_by' == 'date')) {
+		   	$query->orderBy('created_at', request('ordering_rule','desc'));
+		   }
+
+		Note : You can write above query with some mordenized way with laravel eloqent , But there’s a better way — to use when():
+
+		Example - 2
+
+			Auther::query();
+			$query->when(request('filter_by' == 'like'), function($q){
+				return $q->where('like' '>' request('like_amount',0));
+			})
+			$query->when(request('filter_by' == 'date'), function($q) {
+				return $q->orderBy('created_at', $request('ordering_rule','desc'));
+			})
+
+		Note : Do some more work on when() method 
+
+5.  Do the work on Raw Queries ?
+
+6. Replicate: make a copy of a row
+	Short one. Without deep explanations, here’s the best way to make a copy of database entry:
+
+	$post = Post::find(1);
+	$Newpost = replicate();
+	$Newpost->save();
+
+7. Transform brackets into an Eloquent query
+   What if you have and-or mix in your SQL query, like this:
+
+   Example - 1 :
+   	User::where('gender','=','male' and 'age','>','18') or ('gender','=','female' and 'age','<',65)->get();
+
+   Modernized Queris with laravel eloquent
+   Example - 2 :
+   	User::where('gender','male')
+   		  orWhere('age','<',18)
+   		  Where('gender','female')
+   		  orWhere('age','>','65')
+   		  ->get();
+
+    or 
+
+    Note : The order will be incorrect. The right way is a little more complicated, using closure functions as sub-queries:
+
+    $q->where(function($query){
+    	$query->where('gender','male')
+    			where('age','>',18);
+    })->orWhere(function($query) {
+    	$query->where('gender','female')
+    			where('age','>',65);
+    });
+
+
+    Example - 3 : orWhere with multiple parameters
+    	Finally, you can pass an array of parameters to orWhere().
+		“Usual” way:
+	$q->where('a',1)
+		orWhere('b',2)
+		orWhere('c',3);
+
+	OR
+
+	$q->where('a',1)
+		orWhere(['b'=>2, 'c'=>3]);
+
+
+8. public function index() {
+
+		$uais = MyModel::select()
+				  ->where(function($query) use ($request) {
+				  		if($request->has('fieldOne')) {
+				  			$query->where('fieldOne','like',"%{$request->get('filedOne')}%");
+				  		}
+				  		// and so on.... many "if" like this previous one 
+				  })
+				->get();
+	}
+
+
+9. $externalVal = "User";
+	User::where(function($query) use $externalVal {
+		$query->where('role','admin')->orWhere('type', $externalVal);
+	})->where('role',1)->get();
+
+
+10. /* you may only want to apply a where statement if a given input value
+		is present on the incoming request.
+	*/
+
+	$role = request('role');
+	$users = User::where($role, function($query, $role) {
+		return $query->where('role_id', $role);
+	})->get();
+
+
+Q. Select all users whose age less than 6 years and also select all users whose age greaterthan 8 years and name should be Abdullah , Shamsha ?
+11. User::select('name','age')
+			->where('age' < 6)
+			->orWhere(function($query) {
+			 	$query('age' > 8);
+			 	$query->whereIn('name','Abdullah','Shamsha');
+			})-get();
+
+12. 
